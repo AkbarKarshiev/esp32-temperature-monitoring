@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Patient Monitoring</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  
+  <!-- Replace all chart.js related libraries with this complete stack -->
+  <script src="https://cdn.jsdelivr.net/npm/moment@2.29.4/moment.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-moment@1.0.1/dist/chartjs-adapter-moment.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@1.2.1/dist/chartjs-plugin-zoom.min.js"></script>
+  
+  <style>
+    .patient-table {
+      max-height: 300px;
+      overflow-y: auto;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .chart-container {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    table {
+      font-size: 0.9em;
+    }
+    th {
+      background: #f8f9fa;
+      position: sticky;
+      top: 0;
+    }
+  </style>
+</head>
+<body class="p-4 bg-light">
+  <div class="container">
+    <h1 class="mb-4">Patient Vital Monitoring</h1>
+
+    <!-- Patient Tables Section -->
+    <div class="row mb-5">
+      <% Object.keys(patients).forEach(patientId => { %>
+        <div class="col-md-4">
+          <div class="card patient-table patient-<%= patientId %>" data-patient-id="<%= patientId %>">
+            <div class="card-header">
+              <h5 class="mb-0">Patient <%= patientId %></h5>
+            </div>
+            <table class="table table-striped mb-0">
+              <thead>
+                <tr>
+                  <th>Temp (°C)</th>
+                  <th>Time</th>
+                </tr>
+              </thead>
+              <tbody>
+                <% patients[patientId].forEach(reading => { %>
+                  <tr>
+                    <td><%= reading.temperature.toFixed(1) %></td>
+                    <td><%= reading.timestamp.toLocaleTimeString() %></td>
+                  </tr>
+                <% }) %>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      <% }) %>
+    </div>
+
+    <!-- Add this before the chart-container div -->
+    <div class="mb-2">
+      <button id="reset-zoom" class="btn btn-sm btn-secondary">Reset Zoom</button>
+    </div>
+
+    <!-- Chart Section -->
+    <div class="chart-container">
+      <canvas id="tempChart"></canvas>
+    </div>
+  </div>
+
+  <script>
+    function getLineColor(index) {
+      const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1'];
+      return colors[index % colors.length];
+    }
+    
+    // Helper function to escape special characters in CSS selectors
+    function escapeSelector(selector) {
+      return selector.replace(/:/g, '\\:').replace(/\./g, '\\.').replace(/\//g, '\\/');
+    }
+    
+    const patientData = {
+      <% Object.keys(patients).forEach((patientId, index) => { %>
+        '<%= patientId %>': {
+          // Data already sorted ascending from server
+          timestamps: <%- JSON.stringify(patients[patientId].map(r => new Date(r.timestamp).toISOString())) %>,
+          temperatures: <%- JSON.stringify(patients[patientId].map(r => r.temperature)) %>,
+          color: getLineColor(<%= index %>)
+        },
+      <% }) %>
+    };
+    
+    // Chart configuration
+    const ctx = document.getElementById('tempChart').getContext('2d');
+    const chart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        datasets: Object.entries(patientData).map(([patientId, data]) => ({
+          label: `Patient ${patientId}`,
+          data: data.timestamps.map((ts, i) => ({
+            x: ts,
+            y: data.temperatures[i]
+          })),
+          borderColor: data.color,
+          backgroundColor: data.color,
+          pointRadius: 3,
+          pointHoverRadius: 5,
+          tension: 0.3
+        }))
+      },
+      options: {
+        responsive: true,
+        scales: {
+          x: {
+            type: 'time',
+            time: {
+              unit: 'minute',
+              tooltipFormat: 'HH:mm:ss',
+              displayFormats: { 
+                minute: 'HH:mm'
+              }
+            },
+            title: { 
+              text: 'Time →', 
+              display: true 
+            }
+          },
+          y: { 
+            title: { 
+              text: 'Temperature (°C)', 
+              display: true 
+            } 
+          }
+        },
+        plugins: {
+          zoom: {
+            pan: {
+              enabled: true,
+              mode: 'x'
+            },
+            zoom: {
+              wheel: {
+                enabled: true
+              },
+              pinch: {
+                enabled: true
+              },
+              mode: 'x'
+            }
+          },
+          legend: { position: 'bottom' }
+        }
+      }
+    });
+  
+    // Auto-update functionality
+    function updateDashboard() {
+      fetch('/api/latest-data')
+        .then(response => response.json())
+        .then(data => {
+          const { patients } = data;
+          console.log("updateDashboard");
+          console.log(patients);
+          // Update the patient tables
+          Object.keys(patients).forEach(patientId => {
+            // Escape special characters in the CSS selector
+            const escapedId = escapeSelector(patientId);
+            const tableBody = document.querySelector(`[data-patient-id="${patientId}"] tbody`);
+            
+            if (tableBody) {
+              // Clear existing rows
+              tableBody.innerHTML = '';
+              
+              // Add new rows (reversed to show newest first)
+              [...patients[patientId]].reverse().forEach(reading => {
+                const row = document.createElement('tr');
+                const readingDate = new Date(reading.timestamp);
+                
+                row.innerHTML = `
+                  <td>${parseFloat(reading.temperature).toFixed(1)}</td>
+                  <td>${readingDate.toLocaleTimeString()}</td>
+                `;
+                tableBody.appendChild(row);
+              });
+            }
+          });
+          
+          // Update chart data
+          const newPatientData = {};
+          Object.keys(patients).forEach((patientId, index) => {
+            newPatientData[patientId] = {
+              timestamps: patients[patientId].map(r => new Date(r.timestamp).toISOString()),
+              temperatures: patients[patientId].map(r => r.temperature),
+              color: getLineColor(index)
+            };
+          });
+          
+          // Update each dataset in the chart
+          chart.data.datasets = Object.entries(newPatientData).map(([patientId, data]) => ({
+            label: `Patient ${patientId}`,
+            data: data.timestamps.map((ts, i) => ({
+              x: ts,
+              y: data.temperatures[i]
+            })),
+            borderColor: data.color,
+            backgroundColor: data.color,
+            pointRadius: 3,
+            pointHoverRadius: 5,
+            tension: 0.3
+          }));
+          
+          chart.update({ duration: 0 });
+        })
+        .catch(error => console.error('Error updating dashboard:', error));
+    }
+    
+    // Update every 10 seconds
+    setInterval(updateDashboard, 10000);
+
+    // Add this after chart initialization
+    document.getElementById('reset-zoom').addEventListener('click', () => {
+      chart.resetZoom();
+    });
+  </script>
+</body>
+</html>
