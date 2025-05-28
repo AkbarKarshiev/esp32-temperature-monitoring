@@ -37,7 +37,7 @@ app.set('view engine', 'ejs');
 app.post('/api/temperature', async (req, res) => {
   try {
     const { patient_id, temperature } = req.body;
-    console.log(patient_id, temperature);
+    // console.log(patient_id, temperature);
     await Temperature.create({ patient_id, temperature });
     res.json({ message: 'Data saved!' });
   } catch (error) {
