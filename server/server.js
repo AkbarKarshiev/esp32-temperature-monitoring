@@ -30,7 +30,7 @@ sequelize.sync();
 
 // Middleware
 app.use(express.json());
-app.use(express.static('public'));
+app.use(express.static('public')); // This serves public directory including libs
 app.set('view engine', 'ejs');
 
 // Routes
@@ -96,6 +96,7 @@ app.get('/api/latest-data', async (req, res) => {
 });
 
 // Start server
-app.listen(port, () => {
+app.listen(port, '0.0.0.0', () => {
   console.log(`Server running at http://0.0.0.0:${port}`);
+  console.log(`Access from network: http://localhost:${port}`);
 });

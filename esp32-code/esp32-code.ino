@@ -6,11 +6,11 @@
 // #define ssid "";
 
 // Wi-Fi Credentials
-const char* ssid = "Akbars_Galaxy_S22";
-const char* password = "123456789t";
+const char* ssid = "Galax_A41";
+const char* password = "123456789g";
 
 // Server Details
-const char* serverIP = "192.168.71.196"; // e.g., "192.168.1.100"
+const char* serverIP = "192.168.228.196"; // e.g., "192.168.1.100"
 const int serverPort = 5000; // Match server port
 const String endpoint = "/api/temperature";
 
